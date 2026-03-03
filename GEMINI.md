@@ -1,35 +1,35 @@
 # Workspace: lev-topog
 
 ## Project Description
-Ferramenta para processamento de dados de levantamento topográfico (RTK/GNSS). Converte relatórios LandStar em formatos QGIS e OpenDroneMap (ODM), projeta pontos de controle em fotos de drone e oferece uma interface web para refinamento manual de GCPs.
+Ferramenta para refinamento de pontos de controle terrestre (GCP) em fotos de drone. Mantém um "mundo" 3D para propagar correções manuais através de recalculação de posição de câmera (PnP).
 
 ## Project Structure
-- `main.py`: Orquestrador central. Gerencia o workflow e inicia o servidor de refinamento.
+- `main.py`: Orquestrador central e início do servidor.
 - `config.py`: Configurações centralizadas (Offsets, caminhos, limites de pontos).
-- `calc/`: Pacote com lógica de conversão, câmera (Pinhole), projeção e o servidor Flask.
+- `calc/`: Lógica de conversão, câmera (Pinhole), projeção (PnP) e o servidor Flask.
 - `static/`: Interface frontend (HTML5 Canvas) para refinamento via navegador.
 - `input/`: Diretório para o arquivo bruto `relatorio_levantamento.csv`.
 - `output/`: Resultados (GCP lists, JSON de estado e fotos de conferência).
-- `26-02-19/`: Diretório de imagens brutas do drone.
+
+## Mandatos de Engenharia
+1. **Modelo de Mundo:** O sistema mantém um estado global ("mundo") com as posições 3D dos GCPs e os parâmetros extrínsecos (posição e orientação) de cada câmera.
+2. **Integridade de Dados:** As coordenadas (E, N, Z) dos GCPs são sagradas e provêm do levantamento topográfico. Apenas as posições das câmeras e as projeções estimadas (u, v) nas imagens podem ser alteradas.
+3. **Refinamento Incremental:** Sempre que uma imagem é "Aceita" (Tecla 'V'), a posição daquela câmera é recalculada via PnP e o deslocamento (bias GPS) é propagado para todas as outras câmeras não-manuais, atualizando suas projeções.
+4. **Interface Fluida:** A interface deve priorizar velocidade (atalhos, movimentação rápida de pontos, filtros de imagem).
+
+## Notas de Lançamento (Fixes)
+- **Correção PnP:** Corrigido erro do OpenCV quando menos de 4 pontos eram usados. Agora utiliza `SOLVEPNP_SQPNP` e chute inicial (Iterative with guess) para maior estabilidade com 3+ pontos.
+- **Propagação de Bias:** Implementada a propagação automática do bias de GPS para imagens não verificadas, agilizando o refinamento de grandes conjuntos de dados.
+- **Importação NumPy:** Corrigido local das importações para evitar erros de escopo durante o refinamento.
 
 ## Workflow de Uso
 1. Coloque o arquivo de levantamento em `input/relatorio_levantamento.csv`.
 2. Execute o orquestrador: `.venv/bin/python main.py`
-3. O sistema perguntará se deseja **Recalcular (c)** (limpa output e reprojeta) ou **Refinar (r)** (mantém progresso).
-4. Acesse `http://localhost:5000` no navegador para refinar os pontos:
+3. O sistema perguntará se deseja **Recalcular (c)** ou **Refinar (r)**.
+4. Acesse `http://localhost:5000` no navegador:
    - **Zoom/Pan:** Scroll e Botão do Meio.
-   - **Mover:** Arrastar com botão esquerdo.
-   - **Deletar/Restaurar:** Botão direito (ponto fica translúcido).
-   - **Adicionar:** Botão "Add Ponto" ou tecla 'A'.
-   - **Aceitar:** Botão "Aceitar Atual" ou tecla 'V'.
+   - **Mover:** Arrastar com botão esquerdo ou clicar com o esquerdo (move o mais próximo).
+   - **Deletar/Restaurar:** Botão direito.
+   - **Adicionar:** Tecla 'A' (posiciona no centro da visão atual).
+   - **Aceitar:** Tecla 'V' (recalcula a câmera e atualiza o mundo).
 5. Clique em **FINALIZAR (F)** para exportar o `gcp_list_im.txt` final.
-
-## Technical Specifications
-- **Datum:** SIRGAS 2000 / UTM zone 22S (EPSG:31982).
-- **Ambiente:** Otimizado para WSL/Linux (OpenCV-Headless).
-- **Interface:** Web-based (Flask + HTML5 Canvas), permite acesso via rede local.
-
-## Gemini CLI Mandates
-- **Persistência:** O arquivo `output/refine_state.json` contém todo o progresso manual e NÃO é apagado automaticamente ao escolher "Refinar".
-- **Imagens:** O servidor busca imagens recursivamente em `config.PHOTO_DIR`.
-- **OpenCV:** Use apenas a versão `headless` para evitar erros de biblioteca gráfica em ambientes de servidor/WSL.

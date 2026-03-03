@@ -84,14 +84,15 @@ def get_image_metadata(img_path):
 
         # Extrair XMP para Gimbal / Altura Absoluta e Relativa (DJI)
         xmp_data = {}
-        # Forma moderna de pegar XMP no Pillow
-        if hasattr(img, 'applist'):
-            for app in img.applist:
+        # Forma segura de pegar XMP no Pillow para evitar erros de tipagem
+        applist = getattr(img, 'applist', [])
+        if applist:
+            for app in applist:
                 if b'http://ns.adobe.com/xap/1.0/\x00' in app[1]:
                     xmp_str = app[1].decode('utf-8', errors='ignore')
                     xmp_data = parse_dji_xmp(xmp_str)
                     break
-        elif 'xmp' in img.info:
+        if not xmp_data and 'xmp' in img.info:
             # Caso o Pillow já tenha extraído para img.info
             xmp_str = img.info['xmp']
             if isinstance(xmp_str, bytes):
@@ -99,13 +100,30 @@ def get_image_metadata(img_path):
             xmp_data = parse_dji_xmp(xmp_str)
         
         # Defaults para DJI Mini 2 e similares
-        meta['gimbal_yaw'] = xmp_data.get('GimbalYawDegree', 0.0)
-        meta['gimbal_pitch'] = xmp_data.get('GimbalPitchDegree', -90.0)
-        meta['gimbal_roll'] = xmp_data.get('GimbalRollDegree', 0.0)
+        meta['gimbal_yaw'] = float(xmp_data.get('GimbalYawDegree', 0.0))
+        meta['gimbal_pitch'] = float(xmp_data.get('GimbalPitchDegree', -90.0))
+        meta['gimbal_roll'] = float(xmp_data.get('GimbalRollDegree', 0.0))
         
-        if 'AbsoluteAltitude' in xmp_data and 'alt' not in meta:
-            meta['alt'] = xmp_data['AbsoluteAltitude']
-        if 'RelativeAltitude' in xmp_data:
-            meta['rel_alt'] = xmp_data['RelativeAltitude']
+        # Priorizar AbsoluteAltitude do XMP
+        if 'AbsoluteAltitude' in xmp_data:
+            meta['alt'] = float(xmp_data['AbsoluteAltitude'])
+        elif 'alt' not in meta:
+            meta['alt'] = 0.0
+
+        meta['rel_alt'] = abs(float(xmp_data.get('RelativeAltitude', 100.0)))
+        
+        # Extração robusta da distância focal
+        # Mini 2 real focal length is approx 4.49mm. 35mm equivalent is 24mm.
+        # Sensor width is 6.17mm. 24 * (6.17 / 36.0) = 4.11mm.
+        f = float(meta.get('focal_length', 0.0))
+        if f <= 0 or f > 20: # Se for 0 ou parecer equivalente (ex: 24)
+            f_35 = float(meta.get('focal_length_35mm', 0.0))
+            if f_35 > 0:
+                f = f_35 * (6.17 / 36.0)
+            else:
+                f = 4.49 # Fallback Mini 2
+        
+        if f < 2.0: f = 4.49
+        meta['f_real'] = f
 
     return meta

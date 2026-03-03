@@ -45,7 +45,19 @@
         .btn-action { background: var(--primary); color: white; }
         .btn-success { background: var(--success); color: white; }
         .btn-danger { background: var(--danger); color: white; }
+        .btn-map { background: #6c757d; color: white; }
         
+        /* Sliders */
+        .filter-controls { padding: 10px 15px; background: #2a2a2a; border-top: 1px solid #333; display: flex; flex-direction: column; gap: 8px; }
+        .slider-group { display: flex; align-items: center; gap: 10px; font-size: 11px; }
+        .slider-group label { width: 60px; color: #aaa; }
+        .slider-group input { flex: 1; accent-color: var(--primary); }
+        
+        /* Sortable */
+        th.sortable { cursor: pointer; position: relative; }
+        th.sortable:hover { color: #fff; background: #333; }
+        th.sortable::after { content: ' ↕'; font-size: 10px; opacity: 0.5; }
+
         /* Modal Add Point */
         #add-modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #333; padding: 20px; border-radius: 10px; border: 1px solid #555; z-index: 100; display: none; width: 300px; box-shadow: 0 10px 30px rgba(0,0,0,0.8); }
         .modal-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; margin-top: 15px; max-height: 200px; overflow-y: auto; }
@@ -60,7 +72,10 @@
     <header>
         <div style="font-weight: bold; font-size: 18px; color: var(--primary);">LEV-TOPOG <span style="color: #888; font-weight: normal; font-size: 14px;">| Refinamento Profissional</span></div>
         <div id="current-img-name" style="font-size: 14px; font-weight: bold;">Carregando...</div>
-        <button class="btn-danger" onclick="finishProject()">FINALIZAR (F)</button>
+        <div style="display: flex; gap: 10px;">
+            <button class="btn-map" onclick="toggleMap()">MOSTRAR MAPA (M)</button>
+            <button class="btn-danger" onclick="finishProject()">FINALIZAR (F)</button>
+        </div>
     </header>
 
     <div class="main-container">
@@ -76,7 +91,7 @@
                 <div class="section-title">Status dos GCPs</div>
                 <div style="overflow-y:auto;">
                     <table id="gcp-table">
-                        <thead><tr><th>ID</th><th>Enc.</th><th>Verif.</th></tr></thead>
+                        <thead><tr><th class="sortable" onclick="sortGCPs('id')">ID</th><th class="sortable" onclick="sortGCPs('found')">Enc.</th><th class="sortable" onclick="sortGCPs('verified')">Verif.</th></tr></thead>
                         <tbody id="gcp-body"></tbody>
                     </table>
                 </div>
@@ -104,10 +119,26 @@
                 <b>V:</b> Aceitar | <b>N/P:</b> Navegar | <b>A:</b> Add Ponto
             </div>
 
+            <div class="filter-controls">
+                <div class="slider-group">
+                    <label>Brilho</label>
+                    <input type="range" id="filter-brightness" min="0" max="200" value="100" oninput="applyFilters()">
+                </div>
+                <div class="slider-group">
+                    <label>Contraste</label>
+                    <input type="range" id="filter-contrast" min="0" max="200" value="100" oninput="applyFilters()">
+                </div>
+                <div class="slider-group">
+                    <label>Saturação</label>
+                    <input type="range" id="filter-saturate" min="0" max="200" value="100" oninput="applyFilters()">
+                </div>
+                <button class="btn-action" style="padding: 4px; border-radius: 4px;" onclick="resetFilters()">Reset Filtros</button>
+            </div>
+
             <div class="section-title">Todas as Imagens</div>
             <div class="img-table-container">
                 <table id="img-table">
-                    <thead><tr><th>Nome</th><th>Pts</th><th>Status</th></tr></thead>
+                    <thead><tr><th class="sortable" onclick="sortImages('name')">Nome</th><th class="sortable" onclick="sortImages('pts')">Pts</th><th class="sortable" onclick="sortImages('status')">Status</th></tr></thead>
                     <tbody id="img-body"></tbody>
                 </table>
             </div>
@@ -123,25 +154,96 @@
         <div class="modal-grid" id="modal-gcp-list"></div>
     </div>
 
+    <!-- Modal Mapa -->
+    <div id="map-modal" style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); z-index:1000; display:none; flex-direction:column;">
+        <header style="background:#222; border-bottom:1px solid #444;">
+            <div style="font-weight:bold;">Mapa de Cobertura</div>
+            <button class="btn-danger" onclick="toggleMap()">FECHAR (M)</button>
+        </header>
+        <div style="flex:1; position:relative; overflow:hidden; display:flex;" id="map-container">
+            <!-- Camadas / Visibilidade -->
+            <div id="map-controls" style="position:absolute; top:15px; left:15px; background:rgba(0,0,0,0.8); padding:10px; border-radius:8px; border:1px solid #555; z-index:1001; font-size:12px;">
+                <b style="display:block; margin-bottom:8px; border-bottom:1px solid #444; padding-bottom:4px;">CAMADAS</b>
+                <label style="display:flex; align-items:center; gap:8px; margin-bottom:5px; cursor:pointer;">
+                    <input type="checkbox" id="check-rects" checked onchange="drawMap()"> Retângulos (Fotos)
+                </label>
+                <label style="display:flex; align-items:center; gap:8px; margin-bottom:5px; cursor:pointer;">
+                    <input type="checkbox" id="check-points" checked onchange="drawMap()"> Pontos (GCPs)
+                </label>
+                <label style="display:flex; align-items:center; gap:8px; margin-bottom:5px; cursor:pointer;">
+                    <input type="checkbox" id="check-bbox" checked onchange="drawMap()"> Área do Levantamento
+                </label>
+                <div style="margin-top:10px; border-top:1px solid #444; padding-top:8px;">
+                    <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                        <span>Pitch Máx:</span>
+                        <span id="val-pitch">-90°</span>
+                    </div>
+                    <input type="range" id="filter-map-pitch" min="-90" max="0" value="0" style="width:100%;" oninput="updatePitchFilter()">
+                </div>
+            </div>
+            
+            <div style="flex:1; position:relative;">
+                <canvas id="map-canvas"></canvas>
+            </div>
+
+            <!-- Lateral Direita: Lista de Fotos Sob o Clique -->
+            <div id="map-right-bar" style="width:250px; background:rgba(20,20,20,0.95); border-left:1px solid #444; display:flex; flex-direction:column; z-index:1001;">
+                <div class="section-title" style="background:#111;">Fotos no Local</div>
+                <div id="map-photo-list" style="flex:1; overflow-y:auto; font-size:12px;">
+                    <div style="padding:20px; color:#666; text-align:center;">Clique com o botão direito no mapa para listar as fotos deste local.</div>
+                </div>
+            </div>
+
+            <div id="map-tooltip" style="position:absolute; background:rgba(0,0,0,0.9); color:white; padding:8px 12px; border-radius:4px; font-size:12px; pointer-events:none; display:none; border:1px solid var(--primary); box-shadow: 0 4px 15px rgba(0,0,0,0.5); z-index:1002; min-width:150px;"></div>
+        </div>
+    </div>
+
     <script>
-        let images = [], data = {}, stats = {}, gcps_project = {};
+        let images = [], data = {}, stats = {}, gcps_project = {}, world = {};
         let currentIdx = 0;
         let imgObj = new Image();
         let canvas = document.getElementById('canvas'), ctx = canvas.getContext('2d');
         
         let zoom = 1.0, offsetX = 0, offsetY = 0, isPanning = false;
         let lastMouseX = 0, lastMouseY = 0, draggingIdx = null, baseScale = 1.0;
+        let dragOffsetX = 0, dragOffsetY = 0;
+        
+        let sortConfig = { gcp: { col: 'id', asc: true }, img: { col: 'name', asc: true } };
+        let gcpLastImgIdx = {};
+
+        // Map State
+        let isMapOpen = false, mapZoom = 1.0, mapOffX = 0, mapOffY = 0, mapScale = 1.0;
+        let mapCanvas = document.getElementById('map-canvas'), mCtx = mapCanvas.getContext('2d');
+        let hoverImgName = null, hoverBBox = false;
+        let surveyBBox = { minE: 0, maxE: 0, minN: 0, maxN: 0, avgZ: 0 };
 
         async function init() {
+            loadFilters();
             const resp = await fetch('/api/images');
             const res = await resp.json();
-            images = res.images; data = res.data; stats = res.stats; gcps_project = res.gcps;
+            images = res.images; data = res.data; stats = res.stats; gcps_project = res.gcps; world = res.world;
             
             currentIdx = images.findIndex(n => !data[n]?.verified);
             if(currentIdx === -1) currentIdx = 0;
             
             updateUI();
             loadCurrentImage();
+        }
+
+        function naturalCompare(a, b) {
+            return a.toString().localeCompare(b.toString(), undefined, { numeric: true, sensitivity: 'base' });
+        }
+
+        function sortGCPs(col) {
+            if (sortConfig.gcp.col === col) sortConfig.gcp.asc = !sortConfig.gcp.asc;
+            else { sortConfig.gcp.col = col; sortConfig.gcp.asc = true; }
+            updateUI();
+        }
+
+        function sortImages(col) {
+            if (sortConfig.img.col === col) sortConfig.img.asc = !sortConfig.img.asc;
+            else { sortConfig.img.col = col; sortConfig.img.asc = true; }
+            updateUI();
         }
 
         function updateUI() {
@@ -152,25 +254,75 @@
 
             // GCP Table
             const gBody = document.getElementById('gcp-body');
-            gBody.innerHTML = stats.gcp_list.map(g => `
-                <tr class="${g.verified > 0 ? 'row-verified' : 'row-pending'}">
+            let gList = [...stats.gcp_list];
+            const { col: gCol, asc: gAsc } = sortConfig.gcp;
+            gList.sort((a, b) => {
+                let vA = a[gCol], vB = b[gCol];
+                let res = (gCol === 'id') ? naturalCompare(vA, vB) : (vA < vB ? -1 : vA > vB ? 1 : 0);
+                return gAsc ? res : -res;
+            });
+
+            gBody.innerHTML = gList.map(g => `
+                <tr class="${g.verified > 0 ? 'row-verified' : 'row-pending'}" onclick="cycleGCPImages('${g.id}')" style="cursor:pointer">
                     <td>${g.id}</td><td>${g.found}</td><td>${g.verified}</td>
                 </tr>
             `).join('');
 
             // Img Table
             const iBody = document.getElementById('img-body');
-            iBody.innerHTML = images.map((name, i) => {
-                const info = data[name] || {points:[], verified:false};
-                const active = i === currentIdx ? 'active' : '';
-                const v = info.verified ? '✓' : '-';
-                return `<tr class="img-row ${active}" onclick="goToImg(${i})">
-                    <td>${name}</td><td>${info.points.filter(p=>!p.deleted).length}</td><td>${v}</td>
+            let iList = images.map((name, i) => ({ name, i, info: data[name] || {points:[], verified:false} }));
+            const { col: iCol, asc: iAsc } = sortConfig.img;
+            iList.sort((a, b) => {
+                let vA, vB;
+                if(iCol === 'name') { vA = a.name; vB = b.name; }
+                else if(iCol === 'pts') { vA = a.info.points.filter(p=>!p.deleted).length; vB = b.info.points.filter(p=>!p.deleted).length; }
+                else { vA = a.info.verified; vB = b.info.verified; }
+                let res = (iCol === 'name') ? naturalCompare(vA, vB) : (vA < vB ? -1 : vA > vB ? 1 : 0);
+                return iAsc ? res : -res;
+            });
+
+            iBody.innerHTML = iList.map(item => {
+                const active = item.i === currentIdx ? 'active' : '';
+                const v = item.info.verified ? '✓' : '-';
+                return `<tr class="img-row ${active}" onclick="goToImg(${item.i})">
+                    <td>${item.name}</td><td>${item.info.points.filter(p=>!p.deleted).length}</td><td>${v}</td>
                 </tr>`;
             }).join('');
             
             const activeRow = iBody.querySelector('.active');
             if(activeRow) activeRow.scrollIntoView({ block: 'nearest' });
+        }
+
+        function cycleGCPImages(gcpId) {
+            const foundIn = images.filter(name => (data[name]?.points || []).some(p => p.id == gcpId && !p.deleted));
+            if(foundIn.length === 0) return;
+            if(gcpLastImgIdx[gcpId] === undefined) gcpLastImgIdx[gcpId] = 0;
+            else gcpLastImgIdx[gcpId] = (gcpLastImgIdx[gcpId] + 1) % foundIn.length;
+            goToImg(images.indexOf(foundIn[gcpLastImgIdx[gcpId]]));
+        }
+
+        function applyFilters() {
+            const b = document.getElementById('filter-brightness').value;
+            const c = document.getElementById('filter-contrast').value;
+            const s = document.getElementById('filter-saturate').value;
+            canvas.style.filter = `brightness(${b}%) contrast(${c}%) saturate(${s}%)`;
+            localStorage.setItem('lev-topog-filters', JSON.stringify({b, c, s}));
+            draw();
+        }
+
+        function resetFilters() {
+            document.getElementById('filter-brightness').value = 100;
+            document.getElementById('filter-contrast').value = 100;
+            document.getElementById('filter-saturate').value = 100;
+            applyFilters();
+        }
+
+        function loadFilters() {
+            const f = JSON.parse(localStorage.getItem('lev-topog-filters') || '{"b":100,"c":100,"s":100}');
+            document.getElementById('filter-brightness').value = f.b;
+            document.getElementById('filter-contrast').value = f.c;
+            document.getElementById('filter-saturate').value = f.s;
+            canvas.style.filter = `brightness(${f.b}%) contrast(${f.c}%) saturate(${f.s}%)`;
         }
 
         function loadCurrentImage() {
@@ -193,18 +345,15 @@
             ctx.fillStyle = '#000'; ctx.fillRect(0, 0, canvas.width, canvas.height);
             const dw = imgObj.naturalWidth * baseScale * zoom, dh = imgObj.naturalHeight * baseScale * zoom;
             ctx.drawImage(imgObj, offsetX, offsetY, dw, dh);
-            
             const points = (data[images[currentIdx]] || {points:[]}).points;
             points.forEach((p, i) => {
                 const px = p.u * baseScale * zoom + offsetX, py = p.v * baseScale * zoom + offsetY;
                 const color = data[images[currentIdx]]?.verified ? '#28a745' : '#ff0000';
-                
                 ctx.globalAlpha = p.deleted ? 0.3 : 1.0;
                 ctx.strokeStyle = color; ctx.lineWidth = 2;
                 ctx.beginPath(); const s = 15;
                 ctx.moveTo(px-s, py-s); ctx.lineTo(px+s, py+s); ctx.moveTo(px+s, py-s); ctx.lineTo(px-s, py+s);
                 ctx.stroke();
-                
                 ctx.fillStyle = '#fff'; ctx.font = 'bold 14px Arial';
                 ctx.fillText(p.id, px + 18, py - 8);
                 ctx.globalAlpha = 1.0;
@@ -224,19 +373,56 @@
             const rect = canvas.getBoundingClientRect();
             const mx = (e.clientX - rect.left - offsetX) / (baseScale * zoom);
             const my = (e.clientY - rect.top - offsetY) / (baseScale * zoom);
-            const points = data[images[currentIdx]]?.points || [];
+            const points = (data[images[currentIdx]] || {points:[]}).points;
+            
+            if(e.button === 1) { 
+                isPanning = true; 
+                lastMouseX = e.clientX; 
+                lastMouseY = e.clientY; 
+                return; 
+            }
 
-            if(e.button === 1) { isPanning = true; lastMouseX = e.clientX; lastMouseY = e.clientY; return; }
             if(e.button === 0) {
+                let closestIdx = -1, minDist = 40 / (baseScale * zoom);
                 points.forEach((p, i) => {
-                    if(Math.sqrt((p.u-mx)**2+(p.v-my)**2) < 40/(baseScale*zoom)) draggingIdx = i;
+                    const d = Math.sqrt((p.u-mx)**2+(p.v-my)**2);
+                    if(d < minDist) { minDist = d; closestIdx = i; }
                 });
-            } else if(e.button === 2) {
-                points.forEach((p, i) => {
-                    if(Math.sqrt((p.u-mx)**2+(p.v-my)**2) < 40/(baseScale*zoom)) {
-                        p.deleted = !p.deleted; saveCurrent(); draw();
+
+                if(closestIdx !== -1) {
+                    // Grab existing point: calculate offset
+                    draggingIdx = closestIdx;
+                    dragOffsetX = points[closestIdx].u - mx;
+                    dragOffsetY = points[closestIdx].v - my;
+                    points[closestIdx].manual = true;
+                } else {
+                    // Jump closest point to here: no offset (center on mouse)
+                    let absIdx = -1, absDist = Infinity;
+                    points.forEach((p, i) => {
+                        const d = Math.sqrt((p.u-mx)**2+(p.v-my)**2);
+                        if(d < absDist) { absDist = d; absIdx = i; }
+                    });
+                    if(absIdx !== -1) {
+                        draggingIdx = absIdx;
+                        dragOffsetX = 0;
+                        dragOffsetY = 0;
+                        points[absIdx].u = mx; 
+                        points[absIdx].v = my; 
+                        points[absIdx].manual = true;
+                        draw();
                     }
+                }
+            } else if(e.button === 2) {
+                let closestIdx = -1, minDist = 40 / (baseScale * zoom);
+                points.forEach((p, i) => {
+                    const d = Math.sqrt((p.u-mx)**2+(p.v-my)**2);
+                    if(d < minDist) { minDist = d; closestIdx = i; }
                 });
+                if(closestIdx !== -1) {
+                    points[closestIdx].deleted = !points[closestIdx].deleted; 
+                    saveCurrent(); 
+                    draw();
+                }
             }
         };
 
@@ -246,14 +432,23 @@
                 lastMouseX = e.clientX; lastMouseY = e.clientY; draw();
             } else if(draggingIdx !== null) {
                 const rect = canvas.getBoundingClientRect();
+                const mx = (e.clientX - rect.left - offsetX) / (baseScale * zoom);
+                const my = (e.clientY - rect.top - offsetY) / (baseScale * zoom);
                 const p = data[images[currentIdx]].points[draggingIdx];
-                p.u = (e.clientX - rect.left - offsetX) / (baseScale * zoom);
-                p.v = (e.clientY - rect.top - offsetY) / (baseScale * zoom);
+                p.u = mx + dragOffsetX;
+                p.v = my + dragOffsetY;
+                p.manual = true;
                 draw();
             }
         };
 
-        window.onmouseup = () => { isPanning = false; if(draggingIdx!==null){ draggingIdx=null; saveCurrent(); } };
+        window.onmouseup = () => { 
+            isPanning = false; 
+            if(draggingIdx !== null) { 
+                draggingIdx = null; 
+                saveCurrent(); 
+            } 
+        };
         canvas.oncontextmenu = (e) => e.preventDefault();
 
         async function saveCurrent() {
@@ -264,7 +459,7 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ name, points: data[name].points, verified: data[name].verified })
             });
-            const res = await resp.json(); stats = res.stats; updateUI();
+            const res = await resp.json(); stats = res.stats; data = res.data; world = res.world; updateUI();
         }
 
         async function verifyCurrent() { 
@@ -273,12 +468,12 @@
         }
         function nextImg() { if(currentIdx < images.length-1) { currentIdx++; loadCurrentImage(); } }
         function prevImg() { if(currentIdx > 0) { currentIdx--; loadCurrentImage(); } }
-        function goToImg(i) { currentIdx = i; loadCurrentImage(); }
+        function goToImg(i) { currentIdx = i; loadCurrentImage(); if(isMapOpen) toggleMap(); }
 
         function openAddModal() {
             const modal = document.getElementById('add-modal');
             const list = document.getElementById('modal-gcp-list');
-            list.innerHTML = Object.keys(gcps_project).sort().map(id => `
+            list.innerHTML = Object.keys(gcps_project).sort(naturalCompare).map(id => `
                 <button class="gcp-btn" onclick="addPoint('${id}')">${id}</button>
             `).join('');
             modal.style.display = 'block';
@@ -288,9 +483,11 @@
         function addPoint(id) {
             const gcp = gcps_project[id];
             if(!data[images[currentIdx]]) data[images[currentIdx]] = {points:[], verified:false};
+            const centerX = (canvas.width / 2 - offsetX) / (baseScale * zoom);
+            const centerY = (canvas.height / 2 - offsetY) / (baseScale * zoom);
             data[images[currentIdx]].points.push({
                 id: id, e: gcp.e, n: gcp.n, z: gcp.z,
-                u: imgObj.naturalWidth / 2, v: imgObj.naturalHeight / 2, deleted: false
+                u: centerX, v: centerY, deleted: false, manual: true
             });
             saveCurrent(); draw(); closeAddModal();
         }
@@ -301,13 +498,351 @@
             }
         }
 
+        // --- Mapa ---
+        async function toggleMap() {
+            isMapOpen = !isMapOpen;
+            const modal = document.getElementById('map-modal');
+            if(!isMapOpen) { modal.style.display = 'none'; return; }
+            modal.style.display = 'flex';
+            
+            // Refresh data
+            const resp = await fetch('/api/images');
+            const res = await resp.json();
+            data = res.data; world = res.world; stats = res.stats;
+            
+            initMapView();
+            drawMap();
+        }
+
+        function initMapView() {
+            mapCanvas.width = mapCanvas.parentElement.clientWidth;
+            mapCanvas.height = mapCanvas.parentElement.clientHeight;
+            
+            // Calculate Survey BBox (GCPs only for the special bounding box)
+            let minE = Infinity, maxE = -Infinity, minN = Infinity, maxN = -Infinity, sumZ = 0;
+            const gcpValues = Object.values(gcps_project);
+            if (gcpValues.length > 0) {
+                gcpValues.forEach(g => {
+                    minE = Math.min(minE, g.e); maxE = Math.max(maxE, g.e);
+                    minN = Math.min(minN, g.n); maxN = Math.max(maxN, g.n);
+                    sumZ += g.z;
+                });
+                const w = maxE - minE, h = maxN - minN;
+                surveyBBox = { 
+                    minE: minE - w * 0.1, maxE: maxE + w * 0.1, 
+                    minN: minN - h * 0.1, maxN: maxN + h * 0.1,
+                    avgZ: sumZ / gcpValues.length,
+                    rawW: w, rawH: h
+                };
+            } else {
+                surveyBBox = { minE: 0, maxE: 0, minN: 0, maxN: 0, avgZ: 0, rawW: 0, rawH: 0 };
+            }
+            
+            // Bounds for overall view (GCPs + Cameras)
+            let viewMinE = Math.min(minE, Infinity), viewMaxE = Math.max(maxE, -Infinity);
+            let viewMinN = Math.min(minN, Infinity), viewMaxN = Math.max(maxN, -Infinity);
+            
+            Object.values(world).forEach(c => {
+                viewMinE = Math.min(viewMinE, c.pos[0]); viewMaxE = Math.max(viewMaxE, c.pos[0]);
+                viewMinN = Math.min(viewMinN, c.pos[1]); viewMaxN = Math.max(viewMaxN, c.pos[1]);
+            });
+
+            // If empty, use sane defaults
+            if (viewMinE === Infinity) { viewMinE = 0; viewMaxE = 100; viewMinN = 0; viewMaxN = 100; }
+            
+            const w_raw = (viewMaxE - viewMinE) || 100, h_raw = (viewMaxN - viewMinN) || 100;
+            viewMinE -= w_raw * 0.3; viewMaxE += w_raw * 0.3;
+            viewMinN -= h_raw * 0.3; viewMaxN += h_raw * 0.3;
+
+            const margin = 20;
+            const w = viewMaxE - viewMinE, h = viewMaxN - viewMinN;
+            mapScale = Math.min((mapCanvas.width - 2*margin) / w, (mapCanvas.height - 2*margin) / h);
+            mapOffX = (mapCanvas.width - w * mapScale) / 2 - viewMinE * mapScale;
+            mapOffY = (mapCanvas.height - h * mapScale) / 2 + viewMaxN * mapScale;
+            mapZoom = 1.0;
+        }
+
+        function w2m(e, n) {
+            return { x: e * mapScale * mapZoom + mapOffX, y: -n * mapScale * mapZoom + mapOffY };
+        }
+
+        function m2w(mx, my) {
+            return {
+                e: (mx - mapOffX) / (mapScale * mapZoom),
+                n: -(my - mapOffY) / (mapScale * mapZoom)
+            };
+        }
+
+        function isPointInPoly(p, poly) {
+            let inside = false;
+            for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+                let xi = poly[i][0], yi = poly[i][1];
+                let xj = poly[j][0], yj = poly[j][1];
+                let intersect = ((yi > p.n) != (yj > p.n)) && (p.e < (xj - xi) * (p.n - yi) / (yj - yi) + xi);
+                if (intersect) inside = !inside;
+            }
+            return inside;
+        }
+
+        let rightClickMarker = null;
+
+        function handleMapRightClick(e) {
+            e.preventDefault();
+            const rect = mapCanvas.getBoundingClientRect();
+            const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+            const wPos = m2w(mx, my);
+            rightClickMarker = wPos;
+
+            const listEl = document.getElementById('map-photo-list');
+            const maxPitch = parseFloat(document.getElementById('filter-map-pitch')?.value || 0);
+
+            let matches = [];
+            Object.entries(world).forEach(([name, cam]) => {
+                if (cam.pitch > maxPitch) return;
+                const fpData = getFootprint(cam);
+                if (isPointInPoly(wPos, fpData.points)) {
+                    // Distância do clique ao centro da foto (drone pos)
+                    const d = Math.sqrt((wPos.e - cam.pos[0])**2 + (wPos.n - cam.pos[1])**2);
+                    matches.push({ name, dist: d, info: data[name] || {points:[], verified:false} });
+                }
+            });
+
+            matches.sort((a, b) => a.dist - b.dist);
+
+            if (matches.length === 0) {
+                listEl.innerHTML = '<div style="padding:20px; color:#666; text-align:center;">Nenhuma foto encontrada neste local.</div>';
+            } else {
+                listEl.innerHTML = matches.map(m => {
+                    const v = m.info.verified ? '✓' : '-';
+                    const active = images.indexOf(m.name) === currentIdx ? 'border:1px solid var(--primary); background:#333;' : '';
+                    return `
+                        <div class="img-row" onclick="goToImg(${images.indexOf(m.name)})" 
+                             style="padding:10px; border-bottom:1px solid #333; cursor:pointer; ${active}">
+                            <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                                <b style="color:var(--primary)">${m.name}</b>
+                                <span style="color:#888;">${v}</span>
+                            </div>
+                            <div style="font-size:10px; color:#888;">Dist. ao Centro: ${m.dist.toFixed(1)}m</div>
+                            <div style="font-size:10px; color:#888;">Pontos: ${m.info.points.filter(p=>!p.deleted).length}</div>
+                        </div>
+                    `;
+                }).join('');
+            }
+            drawMap();
+        }
+
+        function getFootprint(cam) {
+            const R = cam.R_w2c;
+            const sensor_w = 6.17; 
+            const f_px = (cam.f_mm * cam.width) / sensor_w;
+            const cx = cam.width / 2, cy = cam.height / 2;
+            
+            // Ground Z: Prioritize survey average Z
+            let groundZ = stats.avg_ground_z || 0;
+            if (!groundZ && Object.keys(gcps_project).length > 0) {
+                const zvals = Object.values(gcps_project).map(g => g.z);
+                groundZ = zvals.reduce((a,b)=>a+b, 0) / zvals.length;
+            }
+
+            // H is the distance from camera to the projection plane (ground)
+            // If we have a groundZ, H = CamZ - GroundZ. 
+            // Otherwise fallback to rel_alt.
+            let h = cam.pos[2] - groundZ;
+            
+            // Fallback safety: if H is not sane (drone too close or too far or groundZ=0)
+            if (h < 1 || h > 1000) {
+                h = cam.rel_alt || 100;
+                groundZ = cam.pos[2] - h;
+            }
+
+            const corners = [[0,0], [cam.width, 0], [cam.width, cam.height], [0, cam.height]];
+            const R_inv = R[0].map((_, colIndex) => R.map(row => row[colIndex]));
+            
+            const fp = corners.map(c => {
+                const vx = (c[0] - cx) / f_px, vy = (c[1] - cy) / f_px, vz = 1.0;
+                const v_world = [
+                    R_inv[0][0]*vx + R_inv[0][1]*vy + R_inv[0][2]*vz,
+                    R_inv[1][0]*vx + R_inv[1][1]*vy + R_inv[1][2]*vz,
+                    R_inv[2][0]*vx + R_inv[2][1]*vy + R_inv[2][2]*vz
+                ];
+                
+                // Project to groundZ
+                let k = -h / (v_world[2] || -1);
+                const max_k = h * 5.0; 
+                if (k < 0 || v_world[2] > -0.05) k = max_k;
+                if (k > max_k) k = max_k;
+                
+                return [cam.pos[0] + k*v_world[0], cam.pos[1] + k*v_world[1]];
+            });
+
+            // Calculate Dimensions (X: Average of Top/Bottom width, Y: Average of Left/Right height)
+            const dist = (p1, p2) => Math.sqrt((p1[0]-p2[0])**2 + (p1[1]-p2[1])**2);
+            const wTop = dist(fp[0], fp[1]), wBot = dist(fp[2], fp[3]);
+            const hL = dist(fp[0], fp[3]), hR = dist(fp[1], fp[2]);
+            
+            return {
+                points: fp,
+                dimX: (wTop + wBot) / 2,
+                dimY: (hL + hR) / 2,
+                altDrone: cam.pos[2],
+                altGround: groundZ
+            };
+        }
+
+        function updatePitchFilter() {
+            const v = document.getElementById('filter-map-pitch').value;
+            document.getElementById('val-pitch').innerText = v + '°';
+            drawMap();
+        }
+
+        function drawMap() {
+            mCtx.fillStyle = '#111'; mCtx.fillRect(0, 0, mapCanvas.width, mapCanvas.height);
+            
+            const showRects = document.getElementById('check-rects')?.checked !== false;
+            const showPoints = document.getElementById('check-points')?.checked !== false;
+            const showBBox = document.getElementById('check-bbox')?.checked !== false;
+            const maxPitch = parseFloat(document.getElementById('filter-map-pitch')?.value || 0);
+
+            // Draw BBox first (background)
+            hoverBBox = false;
+            if (showBBox && surveyBBox.maxE !== 0) {
+                const p1 = w2m(surveyBBox.minE, surveyBBox.maxN);
+                const p2 = w2m(surveyBBox.maxE, surveyBBox.minN);
+                
+                mCtx.beginPath();
+                mCtx.rect(p1.x, p1.y, p2.x - p1.x, p2.y - p1.y);
+                
+                if (mCtx.isPointInPath(lastMouseX, lastMouseY)) hoverBBox = true;
+                
+                mCtx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+                mCtx.setLineDash([5, 5]);
+                mCtx.lineWidth = hoverBBox ? 2 : 1;
+                mCtx.stroke();
+                mCtx.setLineDash([]);
+                
+                mCtx.fillStyle = hoverBBox ? 'rgba(255,255,255,0.05)' : 'transparent';
+                mCtx.fill();
+            }
+
+            // Draw Footprints
+            hoverImgName = null;
+            let hoverData = null;
+
+            if (showRects) {
+                Object.entries(world).forEach(([name, cam]) => {
+                    if (cam.pitch > maxPitch) return;
+
+                    const fpData = getFootprint(cam);
+                    const pts = fpData.points.map(p => w2m(p[0], p[1]));
+                    
+                    mCtx.beginPath();
+                    mCtx.moveTo(pts[0].x, pts[0].y);
+                    pts.slice(1).forEach(p => mCtx.lineTo(p.x, p.y));
+                    mCtx.closePath();
+                    
+                    const isManual = cam.manual;
+                    if(mCtx.isPointInPath(lastMouseX, lastMouseY)) {
+                        hoverImgName = name;
+                        hoverData = fpData;
+                    }
+
+                    mCtx.strokeStyle = isManual ? '#28a745' : '#d63031';
+                    mCtx.lineWidth = (hoverImgName === name) ? 2 : 1;
+                    mCtx.stroke();
+                    
+                    mCtx.fillStyle = isManual ? 'rgba(40,167,69,0.05)' : 'rgba(214,48,49,0.05)';
+                    if(hoverImgName === name) mCtx.fillStyle = 'rgba(255,255,255,0.15)';
+                    mCtx.fill();
+
+                    const center = w2m(cam.pos[0], cam.pos[1]);
+                    mCtx.fillStyle = isManual ? '#28a745' : '#d63031';
+                    if(hoverImgName === name) mCtx.fillStyle = '#fff';
+                    mCtx.beginPath(); mCtx.arc(center.x, center.y, 3, 0, 2*Math.PI); mCtx.fill();
+                });
+            }
+
+            // Draw Right-Click Marker
+            if (rightClickMarker) {
+                const p = w2m(rightClickMarker.e, rightClickMarker.n);
+                mCtx.strokeStyle = '#fff'; mCtx.lineWidth = 2;
+                mCtx.beginPath(); mCtx.arc(p.x, p.y, 6, 0, 2*Math.PI); mCtx.stroke();
+                mCtx.beginPath(); mCtx.moveTo(p.x-8, p.y); mCtx.lineTo(p.x+8, p.y); mCtx.moveTo(p.x, p.y-8); mCtx.lineTo(p.x, p.y+8); mCtx.stroke();
+            }
+
+            // Draw Points
+            if (showPoints) {
+                Object.values(gcps_project).forEach(g => {
+                    const p = w2m(g.e, g.n);
+                    const isFixed = Object.values(data).some(d => d.verified && d.points.some(pt => pt.id == g.id && !pt.deleted));
+                    mCtx.fillStyle = isFixed ? '#28a745' : '#444';
+                    mCtx.strokeStyle = '#fff'; mCtx.lineWidth = 1;
+                    mCtx.beginPath(); mCtx.arc(p.x, p.y, 3.5, 0, 2*Math.PI);
+                    mCtx.fill(); mCtx.stroke();
+                    mCtx.fillStyle = '#fff'; mCtx.font = '10px Arial'; mCtx.textAlign = 'left';
+                    mCtx.fillText(g.id, p.x + 6, p.y + 3);
+                });
+            }
+
+            // Tooltip logic
+            const tip = document.getElementById('map-tooltip');
+            if(hoverImgName && hoverData) {
+                tip.style.display = 'block';
+                tip.innerHTML = `
+                    <b style="color:var(--primary)">${hoverImgName}</b><br>
+                    Dim: ${hoverData.dimX.toFixed(1)}m x ${hoverData.dimY.toFixed(1)}m<br>
+                    Z Drone: ${hoverData.altDrone.toFixed(2)}m<br>
+                    Z Solo: ${hoverData.altGround.toFixed(2)}m
+                `;
+                tip.style.left = (lastMouseX + 15) + 'px'; tip.style.top = (lastMouseY + 15) + 'px';
+            } else if (hoverBBox) {
+                tip.style.display = 'block';
+                tip.innerHTML = `
+                    <b style="color:#fff">Área do Levantamento</b><br>
+                    GCPs: ${Object.keys(gcps_project).length}<br>
+                    Dim: ${surveyBBox.rawW.toFixed(1)}m x ${surveyBBox.rawH.toFixed(1)}m<br>
+                    Z Solo Médio: ${surveyBBox.avgZ.toFixed(2)}m
+                `;
+                tip.style.left = (lastMouseX + 15) + 'px'; tip.style.top = (lastMouseY + 15) + 'px';
+            } else tip.style.display = 'none';
+        }
+
+        mapCanvas.onmousemove = (e) => {
+            const rect = mapCanvas.getBoundingClientRect();
+            lastMouseX = e.clientX - rect.left; lastMouseY = e.clientY - rect.top;
+            if(isPanning) {
+                mapOffX += (e.clientX - lastMouseX_raw); mapOffY += (e.clientY - lastMouseY_raw);
+                lastMouseX_raw = e.clientX; lastMouseY_raw = e.clientY;
+            }
+            drawMap();
+        };
+        let lastMouseX_raw, lastMouseY_raw;
+        mapCanvas.onmousedown = (e) => {
+            if(e.button === 1) { isPanning = true; lastMouseX_raw = e.clientX; lastMouseY_raw = e.clientY; }
+            if(e.button === 0 && hoverImgName) {
+                goToImg(images.indexOf(hoverImgName));
+                toggleMap();
+            }
+            if(e.button === 2) {
+                handleMapRightClick(e);
+            }
+        };
+        mapCanvas.oncontextmenu = (e) => e.preventDefault();
+        mapCanvas.onwheel = (e) => {
+            const delta = e.deltaY > 0 ? 0.9 : 1.1;
+            const rect = mapCanvas.getBoundingClientRect();
+            const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+            mapOffX = mx - (mx - mapOffX) * delta; mapOffY = my - (my - mapOffY) * delta;
+            mapZoom *= delta; drawMap();
+        };
+
         window.onkeydown = (e) => {
             if(document.activeElement.tagName === 'INPUT') return;
             const k = e.key.toLowerCase();
             if(k==='v') verifyCurrent(); if(k==='n') nextImg(); if(k==='p') prevImg(); if(k==='a') openAddModal();
+            if(k==='m') toggleMap();
         };
 
-        window.onresize = resetView;
+        window.onresize = () => { resetView(); if(isMapOpen) initMapView(); draw(); if(isMapOpen) drawMap(); };
         init();
     </script>
 </body>

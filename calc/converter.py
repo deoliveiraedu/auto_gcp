@@ -7,11 +7,17 @@ def parse_coordinate_system(line):
     # Procura por "zone XX" e "N" ou "S" dentro da string
     match = re.search(r'zone\s+(\d+)\s*([NS])', line, re.IGNORECASE)
     if match:
-        zone = match.group(1)
+        zone = int(match.group(1))
         hem = match.group(2).upper()
-        south = "+south " if hem == 'S' else ""
-        return f"+proj=utm +zone={zone} {south}+datum=SIRGAS2000 +units=m +no_defs"
-    return None
+        if hem == 'S':
+            # SIRGAS 2000 / UTM zones 18S to 25S (Brasil Sul)
+            if 18 <= zone <= 25:
+                return f"EPSG:{31978 + (zone - 18)}"
+        else:
+            # SIRGAS 2000 / UTM zones 19N to 22N (Brasil Norte)
+            if 19 <= zone <= 22:
+                return f"EPSG:{31972 + (zone - 18)}"
+    return "EPSG:31982" # Default: 22S
 
 def process_survey(input_file, qgis_output, gcp_output):
     if not os.path.exists(input_file):
@@ -27,7 +33,7 @@ def process_survey(input_file, qgis_output, gcp_output):
         
     if not lines: return
 
-    proj_string = parse_coordinate_system(lines[0]) or "+proj=utm +zone=22 +south +datum=SIRGAS2000 +units=m +no_defs"
+    proj_string = "EPSG:31982"
 
     qgis_data = [['Ponto', 'Norte', 'Este', 'Elevacao', 'Status', 'HRMS', 'VRMS']]
     gcp_data = [proj_string]
