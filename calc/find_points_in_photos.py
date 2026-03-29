@@ -41,11 +41,12 @@ def main():
     transformer = Transformer.from_crs("epsg:4326", config.UTM_PROJ, always_xy=True)
     
     # Obter a string de projeção correta do gcp_list.txt se possível
-    proj_line = "+proj=utm +zone=22 +south +datum=SIRGAS2000 +units=m +no_defs"
+    proj_line = config.UTM_PROJ.upper()
     if os.path.exists(config.GCP_LIST_ODM):
         with open(config.GCP_LIST_ODM, 'r') as f:
             line1 = f.readline().strip()
-            if line1.startswith("+proj"): proj_line = line1
+            if line1.startswith("+proj") or line1.startswith("EPSG:"): 
+                proj_line = line1
 
     photos_data = {}
     print(f"Calculando projeções em todas as fotos...")

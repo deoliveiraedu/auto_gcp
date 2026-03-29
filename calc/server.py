@@ -21,7 +21,7 @@ WORLD_FILE = os.path.join(config.OUTPUT_DIR, 'world.json')
 
 class RefineState:
     def __init__(self):
-        self.projection_line = "EPSG:31982" # Default
+        self.projection_line = config.UTM_PROJ.upper()
         self.path_cache = {}
         self.data: dict = self.load_data() # Loads projection from file if available
         self.gcps_master = self.load_master_gcps()
@@ -139,7 +139,7 @@ class RefineState:
                 lines = f.readlines()
                 if lines: 
                     first_line = lines[0].strip()
-                    if first_line.startswith("EPSG:"):
+                    if first_line.startswith("EPSG:") or first_line.startswith("+proj"):
                         self.projection_line = first_line
                 for line in lines[1:]:
                     parts = line.strip().split()

@@ -15,14 +15,14 @@ GCP_LIST_IM = os.path.join(OUTPUT_DIR, 'gcp_list_im.txt')
 PONTOS_NAS_FOTOS_TXT = os.path.join(OUTPUT_DIR, 'pontos_nas_fotos.txt')
 
 # Parâmetros Geográficos e de Câmera
-UTM_PROJ = "epsg:31982"  # SIRGAS 2000 / UTM zone 22S
+UTM_PROJ = "epsg:31980"  # SIRGAS 2000 / UTM zone 
 YAW_OFFSET = 0.0          # Ajuste de Declinação/Orientação
 RADIUS_METERS = 150.0    # Raio de busca para projetar pontos na foto
 MAX_PITCH_OFFSET = 5.0    # Ignorar fotos se Pitch > -85 (5 graus fora do Nadir)
 
 # Offsets de GPS (Correção sistemática da posição do Drone em metros)
-GPS_OFFSET_NORTH = 5.0
-GPS_OFFSET_EAST = 0.0
+GPS_OFFSET_NORTH = 6.0
+GPS_OFFSET_EAST = 2.0
 GPS_OFFSET_Z = 0.0
 
 # Parâmetros de Filtro de Qualidade (ODM)

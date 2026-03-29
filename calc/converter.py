@@ -17,7 +17,7 @@ def parse_coordinate_system(line):
             # SIRGAS 2000 / UTM zones 19N to 22N (Brasil Norte)
             if 19 <= zone <= 22:
                 return f"EPSG:{31972 + (zone - 18)}"
-    return "EPSG:31982" # Default: 22S
+    return None
 
 def process_survey(input_file, qgis_output, gcp_output):
     if not os.path.exists(input_file):
@@ -33,7 +33,13 @@ def process_survey(input_file, qgis_output, gcp_output):
         
     if not lines: return
 
-    proj_string = "EPSG:31982"
+    # Tenta detectar o sistema de coordenadas do arquivo, senão usa o do config
+    proj_string = config.UTM_PROJ.upper()
+    for line in lines[:5]: # Procura nas primeiras 5 linhas
+        detected = parse_coordinate_system(line)
+        if detected:
+            proj_string = detected
+            break
 
     qgis_data = [['Ponto', 'Norte', 'Este', 'Elevacao', 'Status', 'HRMS', 'VRMS']]
     gcp_data = [proj_string]
