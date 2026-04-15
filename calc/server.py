@@ -144,7 +144,9 @@ class RefineState:
                 for line in lines[1:]:
                     parts = line.strip().split()
                     if len(parts) >= 7:
-                        e, n, z, u, v, filename, gcp_id = parts
+                        e, n, z, u, v = parts[:5]
+                        gcp_id = parts[-1]
+                        filename = ' '.join(parts[5:-1])
                         if filename not in temp_data:
                             temp_data[filename] = {'points': [], 'verified': False}
                         temp_data[filename]['points'].append({

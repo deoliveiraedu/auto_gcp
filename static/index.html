@@ -16,6 +16,7 @@
         /* Centro: Canvas */
         .center-col { flex: 1; position: relative; background: #000; overflow: hidden; display: flex; align-items: center; justify-content: center; }
         canvas { cursor: crosshair; }
+        #overlay-canvas { position: absolute; top: 0; left: 0; pointer-events: none; }
         
         /* Coluna Direita: Imagens e Atalhos */
         .right-col { width: 350px; background: var(--surface); border-left: 1px solid #333; overflow-y: auto; display: flex; flex-direction: column; }
@@ -101,6 +102,7 @@
         <!-- Centro: Canvas -->
         <div class="center-col">
             <canvas id="canvas"></canvas>
+            <canvas id="overlay-canvas"></canvas>
             <div class="canvas-controls">
                 <button class="btn-action" onclick="prevImg()">ANTERIOR (P)</button>
                 <button class="btn-action" onclick="openAddModal()">ADD PONTO (A)</button>
@@ -203,6 +205,7 @@
         let currentIdx = 0;
         let imgObj = new Image();
         let canvas = document.getElementById('canvas'), ctx = canvas.getContext('2d');
+        let overlayCanvas = document.getElementById('overlay-canvas'), octx = overlayCanvas.getContext('2d');
         
         let zoom = 1.0, offsetX = 0, offsetY = 0, isPanning = false;
         let lastMouseX = 0, lastMouseY = 0, draggingIdx = null, baseScale = 1.0;
@@ -335,6 +338,8 @@
         function resetView() {
             canvas.width = canvas.parentElement.clientWidth;
             canvas.height = canvas.parentElement.clientHeight;
+            overlayCanvas.width = canvas.width;
+            overlayCanvas.height = canvas.height;
             baseScale = Math.min(canvas.width / imgObj.naturalWidth, canvas.height / imgObj.naturalHeight);
             zoom = 1.0;
             offsetX = (canvas.width - imgObj.naturalWidth * baseScale) / 2;
@@ -358,6 +363,145 @@
                 ctx.fillText(p.id, px + 18, py - 8);
                 ctx.globalAlpha = 1.0;
             });
+            drawOverlays();
+        }
+
+        function drawOverlays() {
+            octx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+            const name = images[currentIdx];
+            const cam = world[name];
+            if (!cam) return;
+
+            const SENSOR_WIDTH_MM = 6.17;
+            const f_px = (cam.f_mm * cam.width) / SENSOR_WIDTH_MM;
+            const gsd = cam.rel_alt / f_px; // meters per image pixel
+            const metersPerScreenPx = gsd / (baseScale * zoom);
+
+            drawCompass(cam.yaw);
+            drawScaleBar(metersPerScreenPx);
+        }
+
+        function drawCompass(yaw) {
+            const rad = yaw * Math.PI / 180;
+            // North direction in image/screen space (y-down): (-sin(yaw), -cos(yaw))
+            const nx = -Math.sin(rad);
+            const ny = -Math.cos(rad);
+            const perp_x = -ny, perp_y = nx; // perpendicular (east direction)
+
+            const cx = 55, cy = 55;
+            const arrowLen = 28;
+            const halfW = 7;
+
+            // Background circle
+            octx.save();
+            octx.globalAlpha = 0.75;
+            octx.fillStyle = '#111';
+            octx.beginPath();
+            octx.arc(cx, cy, 40, 0, 2 * Math.PI);
+            octx.fill();
+            octx.globalAlpha = 1.0;
+
+            // S arrow (gray, south)
+            const sBase = { x: cx + nx * 6, y: cy + ny * 6 };
+            const sTip  = { x: cx - nx * arrowLen, y: cy - ny * arrowLen };
+            octx.fillStyle = '#888';
+            octx.beginPath();
+            octx.moveTo(sTip.x, sTip.y);
+            octx.lineTo(sBase.x + perp_x * halfW, sBase.y + perp_y * halfW);
+            octx.lineTo(sBase.x - perp_x * halfW, sBase.y - perp_y * halfW);
+            octx.closePath();
+            octx.fill();
+
+            // N arrow (red, north)
+            const nBase = { x: cx - nx * 6, y: cy - ny * 6 };
+            const nTip  = { x: cx + nx * arrowLen, y: cy + ny * arrowLen };
+            octx.fillStyle = '#e03030';
+            octx.beginPath();
+            octx.moveTo(nTip.x, nTip.y);
+            octx.lineTo(nBase.x + perp_x * halfW, nBase.y + perp_y * halfW);
+            octx.lineTo(nBase.x - perp_x * halfW, nBase.y - perp_y * halfW);
+            octx.closePath();
+            octx.fill();
+
+            // Center dot
+            octx.fillStyle = '#fff';
+            octx.beginPath();
+            octx.arc(cx, cy, 3, 0, 2 * Math.PI);
+            octx.fill();
+
+            // N label
+            const labelDist = 36;
+            octx.fillStyle = '#fff';
+            octx.font = 'bold 13px Arial';
+            octx.textAlign = 'center';
+            octx.textBaseline = 'middle';
+            octx.fillText('N', cx + nx * labelDist, cy + ny * labelDist);
+
+            octx.restore();
+        }
+
+        function drawScaleBar(metersPerScreenPx) {
+            if (!isFinite(metersPerScreenPx) || metersPerScreenPx <= 0) return;
+
+            // Target ~150px wide, round to nice meter value
+            const targetMeters = 150 * metersPerScreenPx;
+            const magnitude = Math.pow(10, Math.floor(Math.log10(targetMeters)));
+            const norm = targetMeters / magnitude;
+            let nice;
+            if (norm < 1.5) nice = 1;
+            else if (norm < 3.5) nice = 2;
+            else if (norm < 7.5) nice = 5;
+            else nice = 10;
+            const niceMeters = nice * magnitude;
+            const barPx = niceMeters / metersPerScreenPx;
+
+            const x = 15, barH = 10;
+            const y = overlayCanvas.height - 30;
+            const segs = 4;
+            const segW = barPx / segs;
+
+            // Background panel
+            octx.save();
+            octx.globalAlpha = 0.75;
+            octx.fillStyle = '#111';
+            octx.beginPath();
+            octx.roundRect(x - 6, y - barH - 8, barPx + 12, barH + 26, 4);
+            octx.fill();
+            octx.globalAlpha = 1.0;
+
+            // Alternating segments
+            octx.save();
+            octx.beginPath();
+            octx.rect(x, y - barH, barPx, barH);
+            octx.clip();
+            for (let i = 0; i < segs; i++) {
+                octx.fillStyle = i % 2 === 0 ? '#000' : '#fff';
+                octx.fillRect(x + i * segW, y - barH, segW, barH);
+            }
+            octx.restore();
+
+            // Border
+            octx.strokeStyle = '#fff';
+            octx.lineWidth = 1;
+            octx.strokeRect(x, y - barH, barPx, barH);
+
+            // End ticks
+            octx.strokeStyle = '#fff';
+            octx.lineWidth = 1.5;
+            octx.beginPath();
+            octx.moveTo(x, y - barH - 3); octx.lineTo(x, y + 1);
+            octx.moveTo(x + barPx, y - barH - 3); octx.lineTo(x + barPx, y + 1);
+            octx.stroke();
+
+            // Label
+            const label = niceMeters >= 1000 ? `${niceMeters / 1000} km` : `${niceMeters} m`;
+            octx.fillStyle = '#fff';
+            octx.font = 'bold 11px Arial';
+            octx.textAlign = 'center';
+            octx.textBaseline = 'top';
+            octx.fillText(label, x + barPx / 2, y + 3);
+
+            octx.restore();
         }
 
         // --- Interaction ---
