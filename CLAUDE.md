@@ -44,9 +44,12 @@ EPSG:31982
 
 ## Key Config (`config.py`)
 - `PHOTO_DIR = 'input/drone'` — drone photos
-- `RADIUS_METERS = 150.0` — search radius for point projection
+- `RADIUS_METERS` — search radius for point projection (oblique shots need larger values, e.g. 350m)
+- `MAX_PITCH_OFFSET` — photos with pitch > (-90 + offset) are skipped; 60 allows oblique shots down to -30°
+- `MAX_PIXEL_DIST_FROM_CENTER` — max px from image center; set ~2400 for oblique shots
 - `MAX_POINTS_PER_PHOTO = 10` — cap per image in gcp_list_im.txt
 - `GPS_OFFSET_NORTH/EAST/Z` — systematic GPS correction (meters)
+- `UTM_PROJ` — fallback only; EPSG auto-detected from CSV header line ("BRAZIL ARATU UTM zone 24S" → EPSG:31984)
 
 ## Known Pitfalls
 - Filenames with spaces (e.g. `DJI_000 (744).JPG`) break naive `split()` — always parse first 5 cols and last col, join middle for filename

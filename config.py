@@ -15,19 +15,19 @@ GCP_LIST_IM = os.path.join(OUTPUT_DIR, 'gcp_list_im.txt')
 PONTOS_NAS_FOTOS_TXT = os.path.join(OUTPUT_DIR, 'pontos_nas_fotos.txt')
 
 # Parâmetros Geográficos e de Câmera
-UTM_PROJ = "epsg:31982"  # SIRGAS 2000 / UTM zone 
+UTM_PROJ = "epsg:31982"  # fallback — overridden by EPSG detected from CSV
 YAW_OFFSET = 0.0          # Ajuste de Declinação/Orientação
-RADIUS_METERS = 150.0    # Raio de busca para projetar pontos na foto
-MAX_PITCH_OFFSET = 5.0    # Ignorar fotos se Pitch > -85 (5 graus fora do Nadir)
+RADIUS_METERS = 350.0    # Raio de busca para projetar pontos na foto
+MAX_PITCH_OFFSET = 15.0   # Ignorar fotos se Pitch > -30 (60 graus fora do Nadir)
 
 # Offsets de GPS (Correção sistemática da posição do Drone em metros)
-GPS_OFFSET_NORTH = -15.0
-GPS_OFFSET_EAST = 7.0
+GPS_OFFSET_NORTH = 0.0
+GPS_OFFSET_EAST = 0.0
 GPS_OFFSET_Z = 0.0
 
 # Parâmetros de Filtro de Qualidade (ODM)
 MAX_POINTS_PER_PHOTO = 10     # Limite de pontos por imagem no gcp_list_im.txt
-MAX_PIXEL_DIST_FROM_CENTER = 1200.0 # Ignorar pontos muito na borda (em pixels)
+MAX_PIXEL_DIST_FROM_CENTER = 2400.0 # Ignorar pontos muito na borda (em pixels)
 TOTAL_MAX_POINTS = 500        # Limite máximo de linhas (marcações) no arquivo final
 
 # Parâmetros de Visualização

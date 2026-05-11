@@ -361,7 +361,18 @@ def finish():
 def serve_gui():
     return send_from_directory(STATIC_DIR, 'index.html')
 
+def reinit_state():
+    """Reinitialise module-level state (used when server is restarted in-process)."""
+    global state
+    state = RefineState()
+
+def make_server_instance(host='0.0.0.0', port=5000):
+    """Return a stoppable werkzeug WSGIServer. Call httpd.shutdown() to stop."""
+    from werkzeug.serving import make_server
+    return make_server(host, port, app)
+
 def run_server():
+    reinit_state()
     app.run(host='0.0.0.0', port=5000, debug=False)
 
 if __name__ == '__main__':
