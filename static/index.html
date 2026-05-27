@@ -151,6 +151,11 @@
                     <label>Saturação</label>
                     <input type="range" id="filter-saturate" min="0" max="200" value="100" oninput="applyFilters()">
                 </div>
+                <div class="slider-group">
+                    <label>Vel. Zoom</label>
+                    <input type="range" id="zoom-speed" min="2" max="30" value="10" step="1" oninput="saveZoomSpeed()">
+                    <span id="zoom-speed-label" style="font-size:10px; color:#888; min-width:28px; text-align:right;">10%</span>
+                </div>
                 <button class="btn-action" style="padding: 4px; border-radius: 4px;" onclick="resetFilters()">Reset Filtros</button>
             </div>
 
@@ -238,7 +243,7 @@
         let surveyBBox = { minE: 0, maxE: 0, minN: 0, maxN: 0, avgZ: 0 };
 
         async function init() {
-            loadFilters();
+            loadFilters(); loadZoomSpeed();
             const resp = await fetch('/api/images');
             const res = await resp.json();
             images = res.images; data = res.data; stats = res.stats; gcps_project = res.gcps; world = res.world;
@@ -335,6 +340,8 @@
             document.getElementById('filter-contrast').value = 100;
             document.getElementById('filter-saturate').value = 100;
             applyFilters();
+            document.getElementById('zoom-speed').value = 10;
+            saveZoomSpeed();
         }
 
         function loadFilters() {
@@ -554,9 +561,27 @@
             draw();
         }
 
+        function getScrollFactor(zoomIn) {
+            const speed = parseInt(document.getElementById('zoom-speed').value) / 100;
+            return zoomIn ? (1 + speed) : (1 - speed);
+        }
+
+        function saveZoomSpeed() {
+            const v = document.getElementById('zoom-speed').value;
+            document.getElementById('zoom-speed-label').innerText = v + '%';
+            localStorage.setItem('lev-topog-zoom-speed', v);
+        }
+
+        function loadZoomSpeed() {
+            const v = localStorage.getItem('lev-topog-zoom-speed') || '10';
+            document.getElementById('zoom-speed').value = v;
+            document.getElementById('zoom-speed-label').innerText = v + '%';
+        }
+
         // --- Interaction ---
         canvas.onwheel = (e) => {
-            e.preventDefault(); const delta = e.deltaY > 0 ? 0.9 : 1.1;
+            e.preventDefault();
+            const delta = getScrollFactor(e.deltaY < 0);
             const rect = canvas.getBoundingClientRect();
             const mx = e.clientX - rect.left, my = e.clientY - rect.top;
             offsetX = mx - (mx - offsetX) * delta; offsetY = my - (my - offsetY) * delta;
