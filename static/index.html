@@ -47,6 +47,15 @@
         .btn-success { background: var(--success); color: white; }
         .btn-danger { background: var(--danger); color: white; }
         .btn-map { background: #6c757d; color: white; }
+
+        /* Zoom control */
+        .zoom-control { position: absolute; top: 15px; right: 15px; background: rgba(0,0,0,0.78); padding: 7px 12px; border-radius: 20px; border: 1px solid #555; display: flex; align-items: center; gap: 8px; backdrop-filter: blur(5px); z-index: 10; }
+        .zoom-step-btn { background: #444; color: #ddd; border: none; border-radius: 50%; width: 22px; height: 22px; cursor: pointer; font-size: 15px; line-height: 1; padding: 0; display: flex; align-items: center; justify-content: center; transition: 0.15s; }
+        .zoom-step-btn:hover { background: var(--primary); color: #fff; }
+        #zoom-slider { width: 110px; accent-color: var(--primary); cursor: pointer; }
+        #zoom-label { font-size: 11px; color: #aaa; min-width: 38px; text-align: right; }
+        .zoom-reset-btn { background: none; border: none; color: #666; cursor: pointer; font-size: 14px; padding: 0 2px; line-height: 1; transition: 0.15s; }
+        .zoom-reset-btn:hover { color: #fff; }
         
         /* Sliders */
         .filter-controls { padding: 10px 15px; background: #2a2a2a; border-top: 1px solid #333; display: flex; flex-direction: column; gap: 8px; }
@@ -103,6 +112,13 @@
         <div class="center-col">
             <canvas id="canvas"></canvas>
             <canvas id="overlay-canvas"></canvas>
+            <div class="zoom-control">
+                <button class="zoom-step-btn" onclick="stepZoom(-1)" title="Zoom Out">−</button>
+                <input type="range" id="zoom-slider" min="0" max="100" value="50" oninput="applyZoomFromSlider()">
+                <button class="zoom-step-btn" onclick="stepZoom(1)" title="Zoom In">+</button>
+                <span id="zoom-label">100%</span>
+                <button class="zoom-reset-btn" onclick="resetView(); draw();" title="Reset Zoom (R)">⟳</button>
+            </div>
             <div class="canvas-controls">
                 <button class="btn-action" onclick="prevImg()">ANTERIOR (P)</button>
                 <button class="btn-action" onclick="openAddModal()">ADD PONTO (A)</button>
@@ -115,7 +131,8 @@
         <div class="right-col">
             <div class="section-title">Instruções e Atalhos</div>
             <div class="shortcuts-box">
-                <b>Scroll:</b> Zoom | <b>Botão Meio:</b> Pan<br>
+                <b>Scroll / +/-:</b> Zoom | <b>R:</b> Reset Zoom<br>
+                <b>Botão Meio:</b> Pan<br>
                 <b>Click Esq:</b> Mover ponto<br>
                 <b>Click Dir:</b> Deletar/Restaurar (Translúcido)<br>
                 <b>V:</b> Aceitar | <b>N/P:</b> Navegar | <b>A:</b> Add Ponto
@@ -344,6 +361,7 @@
             zoom = 1.0;
             offsetX = (canvas.width - imgObj.naturalWidth * baseScale) / 2;
             offsetY = (canvas.height - imgObj.naturalHeight * baseScale) / 2;
+            syncZoomSlider();
         }
 
         function draw() {
@@ -504,13 +522,46 @@
             octx.restore();
         }
 
+        // --- Zoom helpers ---
+        // Log scale: slider 0–100 maps to zoom 0.1x–10x, center (50) = 1.0x
+        const ZOOM_MIN = 0.1, ZOOM_MAX = 10.0;
+        function sliderToZoom(v) { return ZOOM_MIN * Math.pow(ZOOM_MAX / ZOOM_MIN, v / 100); }
+        function zoomToSlider(z) { return 100 * Math.log(Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, z)) / ZOOM_MIN) / Math.log(ZOOM_MAX / ZOOM_MIN); }
+
+        function syncZoomSlider() {
+            document.getElementById('zoom-slider').value = zoomToSlider(zoom);
+            document.getElementById('zoom-label').innerText = Math.round(zoom * 100) + '%';
+        }
+
+        function applyZoomFromSlider() {
+            const newZoom = sliderToZoom(parseFloat(document.getElementById('zoom-slider').value));
+            const cx = canvas.width / 2, cy = canvas.height / 2;
+            const factor = newZoom / zoom;
+            offsetX = cx - (cx - offsetX) * factor;
+            offsetY = cy - (cy - offsetY) * factor;
+            zoom = newZoom;
+            document.getElementById('zoom-label').innerText = Math.round(zoom * 100) + '%';
+            draw();
+        }
+
+        function stepZoom(dir) {
+            const factor = dir > 0 ? 1.3 : 1 / 1.3;
+            const cx = canvas.width / 2, cy = canvas.height / 2;
+            offsetX = cx - (cx - offsetX) * factor;
+            offsetY = cy - (cy - offsetY) * factor;
+            zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, zoom * factor));
+            syncZoomSlider();
+            draw();
+        }
+
         // --- Interaction ---
         canvas.onwheel = (e) => {
             e.preventDefault(); const delta = e.deltaY > 0 ? 0.9 : 1.1;
             const rect = canvas.getBoundingClientRect();
             const mx = e.clientX - rect.left, my = e.clientY - rect.top;
             offsetX = mx - (mx - offsetX) * delta; offsetY = my - (my - offsetY) * delta;
-            zoom *= delta; draw();
+            zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, zoom * delta));
+            syncZoomSlider(); draw();
         };
 
         canvas.onmousedown = (e) => {
@@ -983,7 +1034,8 @@
             if(document.activeElement.tagName === 'INPUT') return;
             const k = e.key.toLowerCase();
             if(k==='v') verifyCurrent(); if(k==='n') nextImg(); if(k==='p') prevImg(); if(k==='a') openAddModal();
-            if(k==='m') toggleMap();
+            if(k==='m') toggleMap(); if(k==='r') { resetView(); draw(); }
+            if(k==='+' || k==='=') stepZoom(1); if(k==='-') stepZoom(-1);
         };
 
         window.onresize = () => { resetView(); if(isMapOpen) initMapView(); draw(); if(isMapOpen) drawMap(); };
