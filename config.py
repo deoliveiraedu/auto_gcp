@@ -9,6 +9,7 @@ PHOTO_DIR = 'input/drone'
 
 # Arquivos de Entrada e Saída (Caminhos Relativos à Raiz)
 INPUT_RELATORIO = os.path.join(INPUT_DIR, 'relatorio_levantamento.csv')
+INPUT_COORDENADAS = os.path.join(INPUT_DIR, 'coordenadas.txt')
 PONTOS_QGIS = os.path.join(OUTPUT_DIR, 'pontos_qgis.csv')
 GCP_LIST_ODM = os.path.join(OUTPUT_DIR, 'gcp_list.txt')
 GCP_LIST_IM = os.path.join(OUTPUT_DIR, 'gcp_list_im.txt')

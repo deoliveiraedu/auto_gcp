@@ -260,9 +260,10 @@ def run_main():
         _err(f"Pasta '{config.INPUT_DIR}' não encontrada.")
         return
 
-    # Step 1: CSV → GCPs
-    _step(1, 4, "Convertendo relatório CSV")
-    converter.process_survey(config.INPUT_RELATORIO, config.PONTOS_QGIS, config.GCP_LIST_ODM)
+    # Step 1: survey → GCPs (auto-detect format: TXT preferred, CSV fallback)
+    input_file = config.INPUT_COORDENADAS if os.path.exists(config.INPUT_COORDENADAS) else config.INPUT_RELATORIO
+    _step(1, 4, f"Convertendo levantamento ({os.path.basename(input_file)})")
+    converter.process_survey(input_file, config.PONTOS_QGIS, config.GCP_LIST_ODM)
 
     # Read detected projection for display
     detected_proj = config.UTM_PROJ.upper()
